@@ -10,36 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiTtsRouteImport } from './routes/api/tts'
-import { Route as ApiSttRouteImport } from './routes/api/stt'
-import { Route as ApiJarvisChatRouteImport } from './routes/api/jarvis-chat'
-import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
-import { Route as ApiChatTitleRouteImport } from './routes/api/chat-title'
 import { Route as ApiAiHealthRouteImport } from './routes/api/ai-health'
+import { Route as ApiChatTitleRouteImport } from './routes/api/chat-title'
+import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
+import { Route as ApiJarvisChatRouteImport } from './routes/api/jarvis-chat'
+import { Route as ApiSttRouteImport } from './routes/api/stt'
+import { Route as ApiTtsRouteImport } from './routes/api/tts'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiTtsRoute = ApiTtsRouteImport.update({
-  id: '/api/tts',
-  path: '/api/tts',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiSttRoute = ApiSttRouteImport.update({
-  id: '/api/stt',
-  path: '/api/stt',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiJarvisChatRoute = ApiJarvisChatRouteImport.update({
-  id: '/api/jarvis-chat',
-  path: '/api/jarvis-chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiGenerateImageRoute = ApiGenerateImageRouteImport.update({
-  id: '/api/generate-image',
-  path: '/api/generate-image',
+const ApiAiHealthRoute = ApiAiHealthRouteImport.update({
+  id: '/api/ai-health',
+  path: '/api/ai-health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatTitleRoute = ApiChatTitleRouteImport.update({
@@ -47,9 +32,24 @@ const ApiChatTitleRoute = ApiChatTitleRouteImport.update({
   path: '/api/chat-title',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAiHealthRoute = ApiAiHealthRouteImport.update({
-  id: '/api/ai-health',
-  path: '/api/ai-health',
+const ApiGenerateImageRoute = ApiGenerateImageRouteImport.update({
+  id: '/api/generate-image',
+  path: '/api/generate-image',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiJarvisChatRoute = ApiJarvisChatRouteImport.update({
+  id: '/api/jarvis-chat',
+  path: '/api/jarvis-chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSttRoute = ApiSttRouteImport.update({
+  id: '/api/stt',
+  path: '/api/stt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTtsRoute = ApiTtsRouteImport.update({
+  id: '/api/tts',
+  path: '/api/tts',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -130,32 +130,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/tts': {
-      id: '/api/tts'
-      path: '/api/tts'
-      fullPath: '/api/tts'
-      preLoaderRoute: typeof ApiTtsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/stt': {
-      id: '/api/stt'
-      path: '/api/stt'
-      fullPath: '/api/stt'
-      preLoaderRoute: typeof ApiSttRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/jarvis-chat': {
-      id: '/api/jarvis-chat'
-      path: '/api/jarvis-chat'
-      fullPath: '/api/jarvis-chat'
-      preLoaderRoute: typeof ApiJarvisChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/generate-image': {
-      id: '/api/generate-image'
-      path: '/api/generate-image'
-      fullPath: '/api/generate-image'
-      preLoaderRoute: typeof ApiGenerateImageRouteImport
+    '/api/ai-health': {
+      id: '/api/ai-health'
+      path: '/api/ai-health'
+      fullPath: '/api/ai-health'
+      preLoaderRoute: typeof ApiAiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chat-title': {
@@ -165,11 +144,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatTitleRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/ai-health': {
-      id: '/api/ai-health'
-      path: '/api/ai-health'
-      fullPath: '/api/ai-health'
-      preLoaderRoute: typeof ApiAiHealthRouteImport
+    '/api/generate-image': {
+      id: '/api/generate-image'
+      path: '/api/generate-image'
+      fullPath: '/api/generate-image'
+      preLoaderRoute: typeof ApiGenerateImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/jarvis-chat': {
+      id: '/api/jarvis-chat'
+      path: '/api/jarvis-chat'
+      fullPath: '/api/jarvis-chat'
+      preLoaderRoute: typeof ApiJarvisChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/stt': {
+      id: '/api/stt'
+      path: '/api/stt'
+      fullPath: '/api/stt'
+      preLoaderRoute: typeof ApiSttRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/tts': {
+      id: '/api/tts'
+      path: '/api/tts'
+      fullPath: '/api/tts'
+      preLoaderRoute: typeof ApiTtsRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
