@@ -55,33 +55,14 @@ const env = (name: string): string => process.env[name]?.trim() ?? "";
 
 const envSuffix = (id: string) => id.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
 
-/** Lovable AI Gateway entries — OpenAI-compatible, keyed by LOVABLE_API_KEY. */
-const LOVABLE_ENTRIES: OmniRegistryEntry[] = [
-  {
-    id: "lovable-gemini",
-    format: "openai",
-    baseUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
-    authHeader: "bearer",
-    models: [
-      { id: "google/gemini-3-flash-preview", name: "Gemini 3 Flash (Lovable)", supportsVision: true },
-      { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash (Lovable)", supportsVision: true },
-    ],
-  },
-  {
-    id: "lovable-openai",
-    format: "openai",
-    baseUrl: "https://ai.gateway.lovable.dev/v1/chat/completions",
-    authHeader: "bearer",
-    models: [{ id: "openai/gpt-5.6-luna", name: "GPT-5.6 Luna (Lovable)", supportsVision: true }],
-  },
-];
-
-const ALL_ENTRIES: OmniRegistryEntry[] = [...OMNIROUTE_REGISTRY, ...LOVABLE_ENTRIES];
+/**
+ * Only direct provider integrations are routed. A provider becomes available
+ * purely because its own <ID>_API_KEY is configured — nothing is assumed.
+ */
+const ALL_ENTRIES: OmniRegistryEntry[] = [...OMNIROUTE_REGISTRY];
 
 const LABELS: Record<string, string> = {
   gemini: "Gemini (Google AI Studio)",
-  "lovable-gemini": "Gemini (Lovable AI Gateway)",
-  "lovable-openai": "OpenAI (Lovable AI Gateway)",
 };
 
 /**
@@ -91,10 +72,6 @@ const LABELS: Record<string, string> = {
  * numbered <ID>_API_KEY_2, _3, ...
  */
 function apiKeysFor(entry: OmniRegistryEntry): string[] {
-  if (entry.id.startsWith("lovable-")) {
-    const k = env("LOVABLE_API_KEY");
-    return k ? [k] : [];
-  }
   const ids = [envSuffix(entry.id), ...(entry.alias ? [envSuffix(entry.alias)] : [])];
   const keys: string[] = [];
   for (const id of ids) {
@@ -173,13 +150,13 @@ function toConfig(entry: OmniRegistryEntry): ProviderConfig | null {
     textModel: text,
     visionModel: vision,
     utilityModel: utility,
-    extraBody: entry.id === "lovable-openai" ? { reasoning_effort: "none" } : undefined,
+    extraBody: undefined,
   };
 }
 
-/** Gemini Direct stays primary; the Lovable gateway is the guaranteed fallback. */
-const PREFERRED_HEAD = ["gemini", "lovable-gemini", "openrouter", "groq", "openai"];
-const PREFERRED_TAIL = ["lovable-openai"];
+/** Gemini Direct stays primary; the other direct providers are the fallbacks. */
+const PREFERRED_HEAD = ["gemini", "openrouter", "groq", "cohere", "mistral", "openai"];
+const PREFERRED_TAIL: string[] = [];
 
 function orderedEntries(): OmniRegistryEntry[] {
   const byId = new Map(ALL_ENTRIES.map((e) => [e.id, e]));
