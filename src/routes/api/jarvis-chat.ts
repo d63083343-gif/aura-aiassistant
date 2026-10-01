@@ -12,7 +12,9 @@ CRITICAL LANGUAGE RULE:
 
 When the user attaches an image, analyze it carefully and answer questions about it. Describe what you see, identify objects, read any text, and respond to the user's request about the image.
 
-Keep replies concise (1-3 short sentences) since they will be spoken aloud. No markdown, no emojis, no lists — just spoken prose.`;
+RESPONSE FORMAT (typed chat): reply like ChatGPT using clean Markdown — short questions get short answers; complex or technical ones get structure with headings, paragraphs, bullet/numbered lists, tables when comparing, and fenced code blocks with a language tag for any code. Put prompts the user should copy in a fenced block. Never pad or repeat.`;
+
+const VOICE_PROMPT = `VOICE MODE: reply will be spoken aloud. Keep it to 1-3 short sentences of plain spoken prose — no markdown, no emojis, no lists, no code.`;
 
 const MODE_PROMPTS: Record<string, string> = {
   general: "MODE: GENERAL. Be a helpful, polite, and efficient AI voice assistant with a balanced tone across everyday topics.",
@@ -45,6 +47,7 @@ export const Route = createFileRoute("/api/jarvis-chat")({
           persona?: string;
           memories?: string[];
           grounding?: boolean;
+          voice?: boolean;
           knowledge?: Array<{ source?: string; content?: string }>;
         };
         const history = Array.isArray(body.messages) ? body.messages : [];
@@ -52,6 +55,7 @@ export const Route = createFileRoute("/api/jarvis-chat")({
         const mode = MODE_PROMPTS[body.mode ?? "general"] ?? MODE_PROMPTS.general;
 
         const sections = [BASE_PROMPT, persona.personality, mode];
+        if (body.voice) sections.push(VOICE_PROMPT);
 
         const memories = (body.memories ?? []).filter((m) => typeof m === "string" && m.trim());
         if (memories.length) {

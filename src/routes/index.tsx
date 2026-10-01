@@ -1430,6 +1430,24 @@ function JarvisPage() {
             messages={messages}
             thinking={state === "thinking"}
             onSpeak={(text) => void speak(text, true)}
+            conversationId={conversationIdRef.current}
+            onRetry={(i) => {
+              let u = i - 1;
+              while (u >= 0 && messages[u].role !== "user") u--;
+              if (u < 0) return;
+              const q = messages[u];
+              const trimmed = messages.slice(0, u);
+              messagesRef.current = trimmed;
+              setMessages(trimmed);
+              void sendUserMessage(q.content === "(image attached)" ? "" : q.content, q.imageUrl);
+            }}
+            onBranch={(i) => {
+              const kept = messages.slice(0, i + 1);
+              conversationIdRef.current = null;
+              messagesRef.current = kept;
+              setMessages(kept);
+              toast.success("Branched into a new chat");
+            }}
           />
         )}
 
@@ -1630,10 +1648,16 @@ function ChatMessages({
   messages,
   thinking,
   onSpeak,
+  onRetry,
+  onBranch,
+  conversationId,
 }: {
   messages: Msg[];
   thinking: boolean;
   onSpeak: (text: string) => void;
+  onRetry: (index: number) => void;
+  onBranch: (index: number) => void;
+  conversationId: string | null;
 }) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [ratings, setRatings] = useState<Record<number, "up" | "down">>({});
@@ -1653,12 +1677,13 @@ function ChatMessages({
     }
   };
 
-  const shareMessage = async (text: string) => {
+  const shareConversation = async () => {
+    const url = `${window.location.origin}/?c=${encodeURIComponent(conversationId ?? String(messages[0]?.ts ?? Date.now()))}`;
     try {
-      if (navigator.share) await navigator.share({ title: "AURA response", text });
+      if (navigator.share) await navigator.share({ title: "AURA conversation", url });
       else {
-        await navigator.clipboard.writeText(text);
-        toast.success("Copied for sharing");
+        await navigator.clipboard.writeText(url);
+        toast.success("Conversation link copied");
       }
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
@@ -1697,15 +1722,14 @@ function ChatMessages({
                       onClick={() => setRatings((current) => ({ ...current, [index]: "down" }))}
                     ><ThumbsDown /></MessageAction>
                     <MessageAction tooltip="Read aloud" onClick={() => onSpeak(message.content)}><Volume2 /></MessageAction>
-                    <MessageAction tooltip="Share" onClick={() => void shareMessage(message.content)}><Share2 /></MessageAction>
+                    <MessageAction tooltip="Share" onClick={() => void shareConversation()}><Share2 /></MessageAction>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <MessageAction tooltip="More options"><MoreHorizontal /></MessageAction>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start">
-                        <DropdownMenuItem onSelect={() => void copyMessage(message.content)}>Copy response</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => onSpeak(message.content)}>Read aloud</DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => void shareMessage(message.content)}>Share response</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onBranch(index)}>Branch in new chat</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onRetry(index)}>Retry</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </MessageActions>
