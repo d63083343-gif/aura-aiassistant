@@ -1860,6 +1860,7 @@ function ChatMessages({
                     <img src={message.imageUrl} alt="Conversation attachment" className="mt-3 max-h-80 w-auto max-w-full rounded-lg border border-border object-contain" />
                   )}
                 </MessageContent>
+            )}
                 {!isUser && (
                   <MessageActions className="mt-3 gap-1 text-muted-foreground">
                     <MessageAction tooltip="Copy" onClick={() => void copyMessage(message.content)}><Copy /></MessageAction>
