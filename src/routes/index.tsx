@@ -124,6 +124,7 @@ function JarvisPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [historyQuery, setHistoryQuery] = useState("");
   const [textInput, setTextInput] = useState("");
+  const [auraModel, setAuraModel] = useState("AURA Lite");
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [showAccount, setShowAccount] = useState(false);
   const [pinEnabled, setPinEnabled] = useState(false);
