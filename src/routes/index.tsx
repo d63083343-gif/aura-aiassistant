@@ -95,7 +95,7 @@ export const Route = createFileRoute("/")({
 
 type Msg = { role: "user" | "assistant"; content: string; ts: number; imageUrl?: string };
 type State = "idle" | "listening" | "thinking" | "speaking";
-type HistoryItem = { id: string; query: string; reply?: string; title?: string; ts: number };
+type HistoryItem = { id: string; query: string; reply?: string; title?: string; ts: number; messages?: Msg[] };
 const HISTORY_KEY = "jarvis.history";
 const MAX_HISTORY = 100;
 
@@ -124,6 +124,7 @@ function JarvisPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [historyQuery, setHistoryQuery] = useState("");
   const [textInput, setTextInput] = useState("");
+  const [auraModel, setAuraModel] = useState("AURA Lite");
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [showAccount, setShowAccount] = useState(false);
   const [pinEnabled, setPinEnabled] = useState(false);
@@ -261,12 +262,26 @@ function JarvisPage() {
   }, []);
   const historyRef = useRef<HistoryItem[]>([]);
   useEffect(() => { historyRef.current = history; }, [history]);
+  // One history entry per conversation thread (ChatGPT-style). A new entry is
+  // only created after New Chat / Branch reset threadIdRef.
+  const threadIdRef = useRef<string | null>(null);
   const addHistoryQuery = useCallback((query: string) => {
+    const now = Date.now();
+    const userMsg: Msg = { role: "user", content: query, ts: now };
+    const current = threadIdRef.current ? historyRef.current.find((h) => h.id === threadIdRef.current) : undefined;
+    if (current) {
+      if (incognitoRef.current) return current.id;
+      const updated: HistoryItem = { ...current, ts: now, messages: [...(current.messages ?? []), userMsg] };
+      persistHistory([updated, ...historyRef.current.filter((h) => h.id !== current.id)]);
+      return current.id;
+    }
     const item: HistoryItem = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `${now}-${Math.random().toString(36).slice(2, 8)}`,
       query,
-      ts: Date.now(),
+      ts: now,
+      messages: [userMsg],
     };
+    threadIdRef.current = item.id;
     if (incognitoRef.current) return item.id;
     persistHistory([item, ...historyRef.current].slice(0, MAX_HISTORY));
     return item.id;
@@ -288,9 +303,15 @@ function JarvisPage() {
   const attachReplyToHistory = useCallback((id: string, reply: string) => {
     if (incognitoRef.current) return;
     const existing = historyRef.current.find((h) => h.id === id);
-    persistHistory(historyRef.current.map((h) => (h.id === id ? { ...h, reply } : h)));
+    const aMsg: Msg = { role: "assistant", content: reply, ts: Date.now() };
+    persistHistory(historyRef.current.map((h) => (h.id === id ? { ...h, reply: h.reply ?? reply, messages: [...(h.messages ?? []), aMsg] } : h)));
     if (existing && !existing.title) void generateTitle(id, existing.query, reply);
   }, [persistHistory, generateTitle]);
+  const syncThread = useCallback((msgs: Msg[]) => {
+    const id = threadIdRef.current;
+    if (!id || incognitoRef.current) return;
+    persistHistory(historyRef.current.map((h) => (h.id === id ? { ...h, messages: msgs } : h)));
+  }, [persistHistory]);
   const disablePin = useCallback(() => {
     try {
       localStorage.removeItem(PIN_KEY);
@@ -305,6 +326,7 @@ function JarvisPage() {
     setTextInput("");
     setError(null);
     conversationIdRef.current = null;
+    threadIdRef.current = null;
     setStatus("New session — tap the core or type to begin");
     setState("idle");
   }, []);
@@ -1157,10 +1179,15 @@ function JarvisPage() {
         onClear={() => persistHistory([])}
         onSelect={(item) => {
           setSidebarOpen(false);
-          setMessages([
+          const full = (item as HistoryItem).messages;
+          const restored: Msg[] = full && full.length ? full : [
             { role: "user", content: item.query, ts: item.ts },
             ...(item.reply ? [{ role: "assistant" as const, content: item.reply, ts: item.ts + 1 }] : []),
-          ]);
+          ];
+          threadIdRef.current = item.id;
+          conversationIdRef.current = null;
+          messagesRef.current = restored;
+          setMessages(restored);
           setStatus(item.title?.trim() || "Chat restored");
           setState("idle");
         }}
@@ -1394,33 +1421,65 @@ function JarvisPage() {
               </button>
             </div>
           )}
-          <div className="flex items-center gap-2 rounded-full border border-[color:var(--jarvis-cyan)]/35 bg-background/95 px-3 py-2.5 backdrop-blur-xl shadow-[0_0_26px_oklch(0.5_0.2_292/0.28)] focus-within:border-[color:var(--jarvis-cyan)] focus-within:shadow-[0_0_34px_oklch(0.55_0.22_292/0.45)] transition">
-            <UploadMenu onImage={setPendingImage} disabled={busy} />
-            <input
-              type="text"
+          <div className="flex flex-col gap-2 rounded-3xl border border-[color:var(--jarvis-cyan)]/35 bg-background/95 px-4 pt-3.5 pb-2.5 backdrop-blur-xl shadow-[0_0_26px_oklch(0.5_0.2_292/0.28)] focus-within:border-[color:var(--jarvis-cyan)] focus-within:shadow-[0_0_34px_oklch(0.55_0.22_292/0.45)] transition">
+            <textarea
+              rows={2}
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && window.matchMedia("(pointer: fine)").matches) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
               placeholder={pendingImage ? "Ask AURA about this image…" : "Message AURA…"}
               disabled={busy}
-              className="font-hud flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
+              className="font-hud max-h-40 min-h-[3rem] w-full resize-none bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
               aria-label="Message AURA"
             />
-            <button
-              type="submit"
-              disabled={busy || (!textInput.trim() && !pendingImage)}
-              aria-label="Send message"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-[color:var(--jarvis-cyan)]/50 bg-[color:var(--jarvis-cyan)]/10 text-[color:var(--jarvis-cyan)] transition hover:bg-[color:var(--jarvis-cyan)]/25 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Send className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setLiveVoiceOpen(true)}
-              aria-label="Open live voice mode"
-              className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[oklch(0.6_0.2_268)] to-[oklch(0.52_0.24_305)] text-white shadow-[0_0_20px_oklch(0.55_0.22_292/0.7)] transition hover:scale-105"
-            >
-              <AudioLines className="h-4 w-4 animate-jarvis-pulse" />
-            </button>
+            <div className="flex items-center gap-2">
+              <UploadMenu onImage={setPendingImage} disabled={busy} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground">
+                    {auraModel} <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {[
+                    ["AURA Lite", "Lightweight · Basic"],
+                    ["AURA Ultra", "Paid Model 1"],
+                    ["AURA Flash", "Paid Model 2"],
+                  ].map(([name, desc]) => (
+                    <DropdownMenuItem key={name} onSelect={() => setAuraModel(name)} className="flex flex-col items-start">
+                      <span className={auraModel === name ? "text-primary" : undefined}>{name}</span>
+                      <span className="text-xs text-muted-foreground">{desc}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <div className="ml-auto">
+                {textInput.trim() || pendingImage ? (
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    aria-label="Send message"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--jarvis-cyan)]/50 bg-[color:var(--jarvis-cyan)]/10 text-[color:var(--jarvis-cyan)] transition hover:bg-[color:var(--jarvis-cyan)]/25 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setLiveVoiceOpen(true)}
+                    aria-label="Open live voice mode"
+                    className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[oklch(0.6_0.2_268)] to-[oklch(0.52_0.24_305)] text-white shadow-[0_0_20px_oklch(0.55_0.22_292/0.7)] transition hover:scale-105"
+                  >
+                    <AudioLines className="h-4 w-4 animate-jarvis-pulse" />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </form>
 
@@ -1439,11 +1498,13 @@ function JarvisPage() {
               const trimmed = messages.slice(0, u);
               messagesRef.current = trimmed;
               setMessages(trimmed);
+              syncThread(trimmed);
               void sendUserMessage(q.content === "(image attached)" ? "" : q.content, q.imageUrl);
             }}
             onBranch={(i) => {
               const kept = messages.slice(0, i + 1);
               conversationIdRef.current = null;
+              threadIdRef.current = null;
               messagesRef.current = kept;
               setMessages(kept);
               toast.success("Branched into a new chat");
@@ -1697,9 +1758,8 @@ function ChatMessages({
         const isUser = message.role === "user";
         return (
           <Message key={`${message.ts}-${index}`} from={message.role} className={isUser ? "max-w-[88%]" : "max-w-full"}>
-            <div className={isUser ? "flex justify-end" : "flex items-start gap-3"}>
-              {!isUser && <AuraLogo size={40} className="mt-0.5 shrink-0 rounded-md" />}
-              <div className={isUser ? "max-w-full" : "min-w-0 flex-1"}>
+            <div className={isUser ? "flex justify-end" : "w-full"}>
+              <div className={isUser ? "max-w-full" : "min-w-0 w-full"}>
                 <MessageContent className={isUser ? "rounded-[1.6rem] border border-border bg-secondary px-5 py-3 text-base leading-relaxed" : "w-full bg-transparent p-0 text-base leading-7"}>
                   <MessageResponse>{message.content}</MessageResponse>
                   {message.imageUrl && (
@@ -1740,8 +1800,7 @@ function ChatMessages({
         );
       })}
       {thinking && messages.at(-1)?.role === "user" && (
-        <div className="flex items-center gap-3" aria-live="polite">
-          <AuraLogo size={40} className="shrink-0 rounded-md" />
+        <div className="flex items-center" aria-live="polite">
           <Shimmer className="text-sm">Thinking…</Shimmer>
         </div>
       )}
