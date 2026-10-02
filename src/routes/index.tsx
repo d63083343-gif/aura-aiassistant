@@ -157,6 +157,7 @@ function JarvisPage() {
   // ── Persistent memory + cloud conversation ───────────────────────────
   const memoriesRef = useRef<string[]>([]);
   const conversationIdRef = useRef<string | null>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
 
   // ── RAG retrieval (user-scoped; feeds context into the existing flow) ─
   const retrieve = useServerFn(retrieveKnowledge);
@@ -1740,6 +1741,7 @@ function ChatMessages({
   onSpeak,
   onRetry,
   onBranch,
+  onEdit,
   conversationId,
 }: {
   messages: Msg[];
@@ -1747,10 +1749,43 @@ function ChatMessages({
   onSpeak: (text: string) => void;
   onRetry: (index: number) => void;
   onBranch: (index: number) => void;
+  onEdit: (text: string) => void;
   conversationId: string | null;
 }) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [ratings, setRatings] = useState<Record<number, "up" | "down">>({});
+  const [menuIndex, setMenuIndex] = useState<number | null>(null);
+  const [selectIndex, setSelectIndex] = useState<number | null>(null);
+  const pressTimer = useRef<number | null>(null);
+  const startPress = (i: number) => {
+    if (selectIndex === i) return;
+    pressTimer.current = window.setTimeout(() => {
+      try { navigator.vibrate?.(15); } catch { /* noop */ }
+      setMenuIndex(i);
+    }, 500);
+  };
+  const cancelPress = () => {
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+  };
+  const formatTs = (ts: number) => {
+    const d = new Date(ts);
+    const now = new Date();
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toLowerCase();
+    if (d.toDateString() === now.toDateString()) return `Today, ${time}`;
+    if (d.toDateString() === y.toDateString()) return `Yesterday, ${time}`;
+    return `${d.toLocaleDateString([], { day: "numeric", month: "short" })}, ${time}`;
+  };
+  const sharePrompt = async (text: string) => {
+    try {
+      if (navigator.share) await navigator.share({ text });
+      else { await navigator.clipboard.writeText(text); toast.success("Prompt copied"); }
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      toast.error("Unable to share");
+    }
+  };
   useEffect(() => {
     const timer = window.setTimeout(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -1789,7 +1824,37 @@ function ChatMessages({
           <Message key={`${message.ts}-${index}`} from={message.role} className={isUser ? "max-w-[88%]" : "max-w-full"}>
             <div className={isUser ? "flex justify-end" : "w-full"}>
               <div className={isUser ? "max-w-full" : "min-w-0 w-full"}>
-                <MessageContent className={isUser ? "rounded-[1.6rem] border border-border bg-secondary px-5 py-3 text-base leading-relaxed" : "w-full bg-transparent p-0 text-base leading-7"}>
+                {isUser ? (
+                  <DropdownMenu open={menuIndex === index} onOpenChange={(o) => setMenuIndex(o ? index : null)}>
+                    <DropdownMenuTrigger asChild>
+                      <div
+                        onPointerDown={(e) => { if (e.button === 0) startPress(index); }}
+                        onPointerUp={cancelPress}
+                        onPointerLeave={cancelPress}
+                        onPointerMove={cancelPress}
+                        onContextMenu={(e) => { e.preventDefault(); setMenuIndex(index); }}
+                        onClick={(e) => e.preventDefault()}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.preventDefault(); }}
+                        className={selectIndex === index ? "select-text" : "select-none [-webkit-touch-callout:none]"}
+                      >
+                        <MessageContent className="rounded-[1.6rem] border border-border bg-secondary px-5 py-3 text-base leading-relaxed">
+                          <MessageResponse>{message.content}</MessageResponse>
+                          {message.imageUrl && (
+                            <img src={message.imageUrl} alt="Conversation attachment" className="mt-3 max-h-80 w-auto max-w-full rounded-lg border border-border object-contain" />
+                          )}
+                        </MessageContent>
+                      </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-52 rounded-2xl p-2">
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">{formatTs(message.ts)}</div>
+                      <DropdownMenuItem onSelect={() => void copyMessage(message.content)}><Copy className="mr-2 h-4 w-4" />Copy</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => { setSelectIndex(index); toast("Select the text you need"); }}><TextSelect className="mr-2 h-4 w-4" />Select text</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onEdit(message.content === "(image attached)" ? "" : message.content)}><Pencil className="mr-2 h-4 w-4" />Edit message</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void sharePrompt(message.content)}><Share2 className="mr-2 h-4 w-4" />Share prompt</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                <MessageContent className="w-full bg-transparent p-0 text-base leading-7">
                   <MessageResponse>{message.content}</MessageResponse>
                   {message.imageUrl && (
                     <img src={message.imageUrl} alt="Conversation attachment" className="mt-3 max-h-80 w-auto max-w-full rounded-lg border border-border object-contain" />
