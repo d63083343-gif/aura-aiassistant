@@ -34,7 +34,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trash2, Search, User, LogOut, Settings as SettingsIcon, Send, X, Moon, Sun, EyeOff, Paperclip, Camera, Image as ImageIcon, FileText, AlertTriangle, Save, ChevronDown, Sparkles, Code2, Palette, AudioLines, Plus, ShieldCheck, Menu, Zap, Brain, Copy, ThumbsUp, ThumbsDown, Share2, MoreHorizontal, Volume2 } from "lucide-react";
+import { Trash2, Search, User, LogOut, Settings as SettingsIcon, Send, X, Moon, Sun, EyeOff, Paperclip, Camera, Image as ImageIcon, FileText, AlertTriangle, Save, ChevronDown, Sparkles, Code2, Palette, AudioLines, Plus, ShieldCheck, Menu, Zap, Brain, Copy, ThumbsUp, ThumbsDown, Share2, MoreHorizontal, Volume2, Square, Pencil, TextSelect } from "lucide-react";
 import { JarvisSidebar } from "@/components/JarvisSidebar";
 import { JarvisProfileSheet } from "@/components/JarvisProfileSheet";
 import {
@@ -692,6 +692,14 @@ function JarvisPage() {
     autoStopRef.current = stopListeningAndSend;
   }, [stopListeningAndSend]);
 
+  const stopGenerating = useCallback(() => {
+    chatAbortRef.current?.abort();
+    chatAbortRef.current = null;
+    try { window.speechSynthesis?.cancel(); } catch { /* noop */ }
+    setState("idle");
+    setStatus("Tap the core to speak");
+  }, []);
+
   const sendUserMessage = useCallback(async (raw: string, imageUrl?: string) => {
     const userText = raw.trim();
     if (!userText && !imageUrl) return;
@@ -766,8 +774,11 @@ function JarvisPage() {
         }
         return { role: m.role, content: m.content };
       });
+      const ctrl = new AbortController();
+      chatAbortRef.current = ctrl;
       const chatRes = await fetch("/api/jarvis-chat", {
         method: "POST",
+        signal: ctrl.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: apiMessages,
@@ -797,6 +808,11 @@ function JarvisPage() {
       setState("idle");
       setStatus("Tap the core to speak");
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setState("idle");
+        setStatus("Tap the core to speak");
+        return;
+      }
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(msg);
       setState("idle");
@@ -1459,7 +1475,16 @@ function JarvisPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
               <div className="ml-auto">
-                {textInput.trim() || pendingImage ? (
+                {busy ? (
+                  <button
+                    type="button"
+                    onClick={stopGenerating}
+                    aria-label="Stop response"
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background transition hover:opacity-80"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                  </button>
+                ) : textInput.trim() || pendingImage ? (
                   <button
                     type="submit"
                     disabled={busy}
@@ -1489,6 +1514,10 @@ function JarvisPage() {
             messages={messages}
             thinking={state === "thinking"}
             onSpeak={(text) => void speak(text, true)}
+            onEdit={(text) => {
+              setTextInput(text);
+              setTimeout(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message AURA"]')?.focus(), 50);
+            }}
             conversationId={conversationIdRef.current}
             onRetry={(i) => {
               let u = i - 1;
