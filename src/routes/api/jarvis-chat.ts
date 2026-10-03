@@ -48,6 +48,7 @@ export const Route = createFileRoute("/api/jarvis-chat")({
           memories?: string[];
           grounding?: boolean;
           voice?: boolean;
+          auraModel?: string;
           knowledge?: Array<{ source?: string; content?: string }>;
         };
         const history = Array.isArray(body.messages) ? body.messages : [];
@@ -103,26 +104,47 @@ export const Route = createFileRoute("/api/jarvis-chat")({
           }
         }
 
-        // Primary backend: AURA Intelligence Gateway. OmniRoute code remains
-        // in src/lib/omniroute as an inactive legacy fallback.
-        const { auraGatewayChat, AuraGatewayError } = await import("@/lib/auraGateway.server");
+        const fullMessages: ChatMessage[] = [
+          { role: "system", content: sections.join("\n\n") },
+          ...history,
+        ];
 
+        // AURA Ultra (Paid Model 1) → AURA Intelligence Gateway.
+        if (body.auraModel === "AURA Ultra") {
+          const { auraGatewayChat, AuraGatewayError } = await import("@/lib/auraGateway.server");
+          try {
+            const result = await auraGatewayChat(fullMessages);
+            return new Response(
+              JSON.stringify({ reply: result.content, provider: result.provider, model: result.model }),
+              { headers: { "Content-Type": "application/json" } },
+            );
+          } catch (err) {
+            const status = err instanceof AuraGatewayError ? err.status : 500;
+            const message = err instanceof AuraGatewayError ? err.message : "AI request failed";
+            return new Response(JSON.stringify({ error: message }), {
+              status,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+        }
+
+        // AURA Lite / AURA Flash → OmniRoute (unchanged).
+        const { routeChatCompletion, OmniRouteError } = await import(
+          "@/lib/omniroute/router.server"
+        );
         try {
-          const result = await auraGatewayChat([
-            { role: "system", content: sections.join("\n\n") },
-            ...history,
-          ]);
+          const result = await routeChatCompletion({
+            messages: fullMessages,
+            tier: hasImage ? "vision" : "text",
+            routeKey: hasImage ? "chat:vision" : "chat",
+          });
           return new Response(
-            JSON.stringify({
-              reply: result.content,
-              provider: result.provider,
-              model: result.model,
-            }),
+            JSON.stringify({ reply: result.content, provider: result.provider, model: result.model }),
             { headers: { "Content-Type": "application/json" } },
           );
         } catch (err) {
-          const status = err instanceof AuraGatewayError ? err.status : 500;
-          const message = err instanceof AuraGatewayError ? err.message : "AI request failed";
+          const status = err instanceof OmniRouteError ? err.status : 500;
+          const message = err instanceof Error ? err.message : "AI routing failed";
           return new Response(JSON.stringify({ error: message }), {
             status,
             headers: { "Content-Type": "application/json" },
