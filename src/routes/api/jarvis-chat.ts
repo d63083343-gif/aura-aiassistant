@@ -103,16 +103,15 @@ export const Route = createFileRoute("/api/jarvis-chat")({
           }
         }
 
-        const { routeChatCompletion, OmniRouteError } = await import(
-          "@/lib/omniroute/router.server"
-        );
+        // Primary backend: AURA Intelligence Gateway. OmniRoute code remains
+        // in src/lib/omniroute as an inactive legacy fallback.
+        const { auraGatewayChat, AuraGatewayError } = await import("@/lib/auraGateway.server");
 
         try {
-          const result = await routeChatCompletion({
-            messages: [{ role: "system", content: sections.join("\n\n") }, ...history],
-            tier: hasImage ? "vision" : "text",
-            routeKey: hasImage ? "chat:vision" : "chat",
-          });
+          const result = await auraGatewayChat([
+            { role: "system", content: sections.join("\n\n") },
+            ...history,
+          ]);
           return new Response(
             JSON.stringify({
               reply: result.content,
@@ -122,8 +121,8 @@ export const Route = createFileRoute("/api/jarvis-chat")({
             { headers: { "Content-Type": "application/json" } },
           );
         } catch (err) {
-          const status = err instanceof OmniRouteError ? err.status : 500;
-          const message = err instanceof Error ? err.message : "AI routing failed";
+          const status = err instanceof AuraGatewayError ? err.status : 500;
+          const message = err instanceof AuraGatewayError ? err.message : "AI request failed";
           return new Response(JSON.stringify({ error: message }), {
             status,
             headers: { "Content-Type": "application/json" },
