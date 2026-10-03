@@ -125,6 +125,8 @@ function JarvisPage() {
   const [historyQuery, setHistoryQuery] = useState("");
   const [textInput, setTextInput] = useState("");
   const [auraModel, setAuraModel] = useState("AURA Lite");
+  const auraModelRef = useRef(auraModel);
+  auraModelRef.current = auraModel;
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [showAccount, setShowAccount] = useState(false);
   const [pinEnabled, setPinEnabled] = useState(false);
@@ -787,6 +789,7 @@ function JarvisPage() {
           mode: modeRef.current,
           persona: personaRef.current,
           memories: memoriesRef.current,
+          auraModel: auraModelRef.current,
         }),
       });
       if (!chatRes.ok) {
