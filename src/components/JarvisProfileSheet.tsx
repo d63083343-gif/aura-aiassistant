@@ -94,7 +94,6 @@ export function JarvisProfileSheet({
     [
       { label: "Voice Mode", Icon: AudioLines, run: act(onOpenVoiceMode) },
       { label: "Live Vision", Icon: Eye, run: act(onOpenLiveVision) },
-      { label: "Share Screen", Icon: MonitorUp, run: act(onOpenScreenShare) },
     ],
     [
       { label: "Storage", Icon: HardDrive, run: act(onOpenStorage) },
@@ -102,15 +101,6 @@ export function JarvisProfileSheet({
     ],
 
     [
-      {
-        label: "PIN Lock",
-        Icon: ShieldCheck,
-        hint: pinEnabled ? "ON" : "OFF",
-        run: () => {
-          onOpenChange(false);
-          onTogglePin();
-        },
-      },
       { label: "Help & Support", Icon: LifeBuoy, run: () => setHelpOpen(true) },
     ],
     [{ label: "Sign Out", Icon: LogOut, danger: true, run: act(onSignOut) }],
