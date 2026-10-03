@@ -713,6 +713,7 @@ function JarvisPage() {
     const historyId = addHistoryQuery(imageUrl ? `[image] ${userText}`.trim() : userText);
     rememberFrom(userText);
     void persistTurn("user", userText || "(image attached)", imageUrl ?? null);
+    if (imageUrl) void saveDataUrlImage(imageUrl, userText || "chat-image");
 
     // If no image is attached, allow image-generation and command routing.
     if (!imageUrl) {
@@ -1451,7 +1452,7 @@ function JarvisPage() {
               }}
               placeholder={pendingImage ? "Ask AURA about this image…" : "Message AURA…"}
               disabled={busy}
-              className="font-hud max-h-40 min-h-[3rem] w-full resize-none bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
+              className="max-h-40 min-h-[3rem] w-full resize-none bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
               aria-label="Message AURA"
             />
             <div className="flex items-center gap-2">
