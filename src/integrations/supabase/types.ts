@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      aura_subscriptions: {
+        Row: {
+          created_at: string
+          current_period_end: string
+          id: string
+          plan: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end: string
+          id?: string
+          plan: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string
+          id?: string
+          plan?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string

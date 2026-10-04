@@ -59,6 +59,7 @@ import {
 import { JarvisDataControls } from "@/components/JarvisDataControls";
 import { JarvisStorageSheet } from "@/components/JarvisStorageSheet";
 import { JarvisScreenShare } from "@/components/JarvisScreenShare";
+import { AuraUpgradeModal, AURA_PLANS, type PaidModel } from "@/components/AuraUpgradeModal";
 import {
   PERSONA_LIST,
   resolvePersona,
@@ -127,6 +128,24 @@ function JarvisPage() {
   const [auraModel, setAuraModel] = useState("AURA Lite");
   const auraModelRef = useRef(auraModel);
   auraModelRef.current = auraModel;
+  const [paidPlans, setPaidPlans] = useState<string[]>([]);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeFor, setUpgradeFor] = useState<PaidModel>("AURA Ultra");
+  useEffect(() => {
+    if (!user) { setPaidPlans([]); return; }
+    supabase
+      .from("aura_subscriptions")
+      .select("plan,current_period_end")
+      .eq("status", "active")
+      .then(({ data }) => {
+        const now = Date.now();
+        setPaidPlans(
+          (data ?? [])
+            .filter((r) => new Date(r.current_period_end).getTime() > now)
+            .map((r) => (r.plan === "ultra" ? "AURA Ultra" : "AURA Flash")),
+        );
+      });
+  }, [user]);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [showAccount, setShowAccount] = useState(false);
   const [pinEnabled, setPinEnabled] = useState(false);
@@ -780,10 +799,14 @@ function JarvisPage() {
       });
       const ctrl = new AbortController();
       chatAbortRef.current = ctrl;
+      const { data: sess } = await supabase.auth.getSession();
       const chatRes = await fetch("/api/jarvis-chat", {
         method: "POST",
         signal: ctrl.signal,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(sess.session ? { Authorization: `Bearer ${sess.session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           messages: apiMessages,
           mode: modeRef.current,
@@ -793,6 +816,11 @@ function JarvisPage() {
         }),
       });
       if (!chatRes.ok) {
+        if (chatRes.status === 403) {
+          setUpgradeFor(auraModelRef.current === "AURA Flash" ? "AURA Flash" : "AURA Ultra");
+          setUpgradeOpen(true);
+          throw new Error("Subscription required for this model.");
+        }
         if (chatRes.status === 429) throw new Error("Rate limited. Try again in a moment.");
         if (chatRes.status === 402) throw new Error("AI credits exhausted.");
         throw new Error(`Chat ${chatRes.status}`);
@@ -1471,14 +1499,36 @@ function JarvisPage() {
                     ["AURA Lite", "Lightweight · Basic"],
                     ["AURA Ultra", "Paid Model 1"],
                     ["AURA Flash", "Paid Model 2"],
-                  ].map(([name, desc]) => (
-                    <DropdownMenuItem key={name} onSelect={() => setAuraModel(name)} className="flex flex-col items-start">
-                      <span className={auraModel === name ? "text-primary" : undefined}>{name}</span>
-                      <span className="text-xs text-muted-foreground">{desc}</span>
-                    </DropdownMenuItem>
-                  ))}
+                  ].map(([name, desc]) => {
+                    const paid = name !== "AURA Lite";
+                    const owned = !paid || paidPlans.includes(name);
+                    return (
+                      <DropdownMenuItem
+                        key={name}
+                        onSelect={() => {
+                          if (owned) setAuraModel(name);
+                          else { setUpgradeFor(name as PaidModel); setUpgradeOpen(true); }
+                        }}
+                        className="flex flex-col items-start"
+                      >
+                        <span className={auraModel === name ? "text-primary" : undefined}>
+                          {name}{" "}
+                          {paid && (owned
+                            ? <span className="text-xs text-primary">✓ Active</span>
+                            : <span className="text-xs text-muted-foreground">🔒 ₹{AURA_PLANS[name as PaidModel].price}/mo</span>)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{desc}</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
+              <AuraUpgradeModal
+                open={upgradeOpen}
+                initial={upgradeFor}
+                onOpenChange={setUpgradeOpen}
+                onSubscribe={() => toast.info("Payments will be activated soon. మీ ప్లాన్ త్వరలో అందుబాటులోకి వస్తుంది.")}
+              />
               <div className="ml-auto">
                 {busy ? (
                   <button

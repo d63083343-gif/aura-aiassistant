@@ -109,6 +109,26 @@ export const Route = createFileRoute("/api/jarvis-chat")({
           ...history,
         ];
 
+        // Paid plans: verify an active subscription server-side before any upstream call.
+        const paidPlan = body.auraModel === "AURA Ultra" ? "ultra" : body.auraModel === "AURA Flash" ? "flash" : null;
+        if (paidPlan) {
+          const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+          if (!token) return Response.json({ error: "Sign in and subscribe to use this model." }, { status: 403 });
+          const { createClient } = await import("@supabase/supabase-js");
+          const sb = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
+            global: { headers: { Authorization: `Bearer ${token}` } },
+            auth: { persistSession: false },
+          });
+          const { data } = await sb
+            .from("aura_subscriptions")
+            .select("current_period_end")
+            .eq("plan", paidPlan)
+            .eq("status", "active")
+            .gt("current_period_end", new Date().toISOString())
+            .maybeSingle();
+          if (!data) return Response.json({ error: "Subscription required." }, { status: 403 });
+        }
+
         // AURA Ultra (Paid Model 1) → AURA Intelligence Gateway.
         if (body.auraModel === "AURA Ultra") {
           const { auraGatewayChat, AuraGatewayError } = await import("@/lib/auraGateway.server");
