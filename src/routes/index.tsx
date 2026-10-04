@@ -1523,6 +1523,12 @@ function JarvisPage() {
                   })}
                 </DropdownMenuContent>
               </DropdownMenu>
+              <AuraUpgradeModal
+                open={upgradeOpen}
+                initial={upgradeFor}
+                onOpenChange={setUpgradeOpen}
+                onSubscribe={() => toast.info("Payments will be activated soon. మీ ప్లాన్ త్వరలో అందుబాటులోకి వస్తుంది.")}
+              />
               <div className="ml-auto">
                 {busy ? (
                   <button
