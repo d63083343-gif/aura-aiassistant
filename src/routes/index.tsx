@@ -60,6 +60,15 @@ import { JarvisDataControls } from "@/components/JarvisDataControls";
 import { JarvisStorageSheet } from "@/components/JarvisStorageSheet";
 import { JarvisScreenShare } from "@/components/JarvisScreenShare";
 import { AuraUpgradeModal, AURA_PLANS, type PaidModel } from "@/components/AuraUpgradeModal";
+
+type SpeechRec = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
 import {
   PERSONA_LIST,
   resolvePersona,
@@ -145,7 +154,7 @@ function JarvisPage() {
             .map((r) => (r.plan === "ultra" ? "AURA Ultra" : "AURA Flash")),
         );
       });
-  }, [user]);
+  }, [user, upgradeOpen]);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [showAccount, setShowAccount] = useState(false);
   const [pinEnabled, setPinEnabled] = useState(false);
@@ -407,6 +416,8 @@ function JarvisPage() {
   const nodeRef = useRef<ScriptProcessorNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const chunksRef = useRef<Float32Array[]>([]);
+  const recogRef = useRef<SpeechRec | null>(null);
+  const recogTextRef = useRef("");
   const rafRef = useRef<number | null>(null);
   const messagesRef = useRef<Msg[]>([]);
   useEffect(() => {
@@ -532,6 +543,25 @@ function JarvisPage() {
       source.connect(analyser);
       source.connect(node);
       node.connect(ctx.destination);
+      // Free browser speech recognition running alongside the level meter.
+      recogTextRef.current = "";
+      const SR = (window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec }).SpeechRecognition
+        ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechRec }).webkitSpeechRecognition;
+      if (SR) {
+        try {
+          const rec = new SR();
+          rec.continuous = true;
+          rec.interimResults = false;
+          rec.lang = navigator.language || "en-IN";
+          rec.onresult = (ev) => {
+            let t = "";
+            for (let i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript + " ";
+            recogTextRef.current = t;
+          };
+          rec.start();
+          recogRef.current = rec;
+        } catch { recogRef.current = null; }
+      }
       setState("listening");
       setStatus("Listening… speak now");
       startMeter(analyser);
@@ -584,12 +614,22 @@ function JarvisPage() {
     setState("thinking");
     setStatus("Transcribing…");
     try {
-      const form = new FormData();
-      form.append("file", blob, "recording.wav");
-      const sttRes = await fetch("/api/stt", { method: "POST", body: form });
-      if (!sttRes.ok) throw new Error(`STT ${sttRes.status}`);
-      const sttData = (await sttRes.json()) as { text?: string };
-      const userText = (sttData.text ?? "").trim();
+      // Free on-device recognition first; paid STT only if the browser has none.
+      const rec = recogRef.current;
+      recogRef.current = null;
+      let userText = "";
+      if (rec) {
+        try { rec.stop(); } catch { /* noop */ }
+        await new Promise((r) => setTimeout(r, 350));
+        userText = recogTextRef.current.trim();
+      } else {
+        const form = new FormData();
+        form.append("file", blob, "recording.wav");
+        const sttRes = await fetch("/api/stt", { method: "POST", body: form });
+        if (!sttRes.ok) throw new Error(`STT ${sttRes.status}`);
+        const sttData = (await sttRes.json()) as { text?: string };
+        userText = (sttData.text ?? "").trim();
+      }
       if (!userText) {
         setState("idle");
         setStatus("Didn't catch that.");
@@ -1043,6 +1083,8 @@ function JarvisPage() {
   const speak = async (text: string, force = false) => {
     if (!voiceRepliesRef.current) return;
     if (!force && !liveModeRef.current) return;
+    // Live Voice / Live Vision: free on-device voice only (no paid TTS).
+    if (liveModeRef.current) { await speakWithBrowser(text); return; }
 
     // Create the Audio element BEFORE the async fetch so mobile browsers
     // still associate playback with the recent user gesture.
@@ -1527,7 +1569,6 @@ function JarvisPage() {
                 open={upgradeOpen}
                 initial={upgradeFor}
                 onOpenChange={setUpgradeOpen}
-                onSubscribe={() => toast.info("Payments will be activated soon. మీ ప్లాన్ త్వరలో అందుబాటులోకి వస్తుంది.")}
               />
               <div className="ml-auto">
                 {busy ? (

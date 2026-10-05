@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      aura_payment_requests: {
+        Row: {
+          amount: number
+          created_at: string
+          email: string | null
+          id: string
+          plan: string
+          reviewed_at: string | null
+          status: string
+          user_id: string
+          utr_number: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          email?: string | null
+          id?: string
+          plan: string
+          reviewed_at?: string | null
+          status?: string
+          user_id: string
+          utr_number: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          email?: string | null
+          id?: string
+          plan?: string
+          reviewed_at?: string | null
+          status?: string
+          user_id?: string
+          utr_number?: string
+        }
+        Relationships: []
+      }
       aura_subscriptions: {
         Row: {
           created_at: string
@@ -225,11 +261,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       match_knowledge_chunks: {
         Args: {
           match_count?: number
@@ -243,9 +304,13 @@ export type Database = {
           source_name: string
         }[]
       }
+      review_payment: {
+        Args: { _approve: boolean; _id: string }
+        Returns: undefined
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -372,6 +437,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
